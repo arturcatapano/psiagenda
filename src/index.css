@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Suavizando o scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Fundo padrão levemente rosado para tirar o branco hospitalar */
+body {
+  background-color: #fff9f9; 
+  color: #2d2d2d;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Animação suave para tudo */
+* {
+  transition-property: color, background-color, border-color, transform, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease-in-out;
+}
