@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
-import { Trash2, Plus, Calendar, User } from 'lucide-react'
+import { Trash2, Plus, Calendar, User, Zap, X } from 'lucide-react'
 
 export default function Manager({ session }) {
   const [horarios, setHorarios] = useState([])
-  const [novoHorario, setNovoHorario] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Estados para o Gerador em Massa
+  const [mostrarGerador, setMostrarGerador] = useState(false)
+  const [dataAlvo, setDataAlvo] = useState('')
+  const [horaInicio, setHoraInicio] = useState('08:00')
+  const [horaFim, setHoraFim] = useState('18:00')
+  const [duracao, setDuracao] = useState(60) // minutos
 
   useEffect(() => {
     fetchHorarios()
@@ -19,21 +25,40 @@ export default function Manager({ session }) {
     if (data) setHorarios(data)
   }
 
-  const handleAdicionar = async () => {
-    if (!novoHorario) return alert('Escolha uma data!')
+  // A Lógica Mágica de Geração em Massa
+  const handleGerarEmMassa = async () => {
+    if (!dataAlvo) return alert('Selecione uma data!')
+
     setLoading(true)
+    
+    // 1. Prepara as variáveis de tempo
+    let dataAtual = new Date(`${dataAlvo}T${horaInicio}:00`)
+    const dataLimite = new Date(`${dataAlvo}T${horaFim}:00`)
+    const novosHorarios = []
+
+    // 2. O Loop: Enquanto a hora atual for menor que o limite...
+    while (dataAtual < dataLimite) {
+      novosHorarios.push({
+        data_hora: dataAtual.toISOString(),
+        status: 'disponivel',
+        user_id: session.user.id
+      })
+
+      // Avança o relógio (adiciona 60 minutos)
+      dataAtual.setMinutes(dataAtual.getMinutes() + parseInt(duracao))
+    }
+
+    // 3. Envia TUDO de uma vez para o Supabase (Bulk Insert)
     const { error } = await supabase
       .from('agendamentos')
-      .insert([{ 
-        data_hora: new Date(novoHorario).toISOString(), 
-        status: 'disponivel',
-        user_id: session.user.id 
-      }])
-    
-    if (error) alert(error.message)
-    else {
+      .insert(novosHorarios)
+
+    if (error) {
+      alert('Erro: ' + error.message)
+    } else {
+      alert(`${novosHorarios.length} horários criados para o dia ${dataAlvo.split('-').reverse().join('/')}!`)
       fetchHorarios()
-      setNovoHorario('') // Limpa o campo
+      setMostrarGerador(false) // Fecha o painel
     }
     setLoading(false)
   }
@@ -51,41 +76,85 @@ export default function Manager({ session }) {
   return (
     <div className="max-w-4xl mx-auto mt-8 px-4 pb-20">
       
-      {/* HEADER DE AÇÃO */}
-      <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 mb-10">
+      {/* HEADER E AÇÕES */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
         <div>
-          <h2 className="text-xl font-bold text-gray-800">Gerenciar Agenda</h2>
-          <p className="text-sm text-gray-500">Abra novos horários para seus pacientes.</p>
+          <h2 className="text-2xl font-bold text-gray-800">Gerenciar Agenda</h2>
+          <p className="text-sm text-gray-500">Você tem {horarios.filter(h => h.status === 'reservado').length} sessões agendadas.</p>
         </div>
         
-        <div className="flex gap-2 w-full md:w-auto">
-          <input 
-            type="datetime-local" 
-            className="border border-gray-300 p-3 rounded-xl focus:outline-none focus:border-[#c6444c] flex-1"
-            value={novoHorario}
-            onChange={(e) => setNovoHorario(e.target.value)}
-          />
-          <button 
-            onClick={handleAdicionar}
-            disabled={loading}
-            className="bg-[#c6444c] text-white px-6 py-3 rounded-xl font-bold hover:brightness-90 flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
-          >
-            <Plus size={20} />
-            <span className="hidden md:inline">Adicionar</span>
-          </button>
-        </div>
+        <button 
+          onClick={() => setMostrarGerador(!mostrarGerador)}
+          className="bg-[#c6444c] text-white px-6 py-3 rounded-xl font-bold hover:shadow-lg transition-all flex items-center gap-2"
+        >
+          {mostrarGerador ? <X /> : <Zap />}
+          {mostrarGerador ? 'Cancelar' : 'Gerar Horários em Massa'}
+        </button>
       </div>
 
-      {/* LISTAGEM */}
+      {/* PAINEL DO GERADOR (Só aparece se clicar no botão) */}
+      {mostrarGerador && (
+        <div className="bg-white p-6 rounded-2xl shadow-xl border border-[#c6444c]/20 mb-10 animate-fade-in-down">
+          <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2">
+            ⚡ Gerador Rápido de Agenda
+          </h3>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
+            <div>
+              <label className="text-xs font-bold text-gray-500">Dia</label>
+              <input 
+                type="date" 
+                className="w-full border p-3 rounded-lg focus:outline-[#c6444c]"
+                value={dataAlvo}
+                onChange={(e) => setDataAlvo(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-500">Início</label>
+              <input 
+                type="time" 
+                className="w-full border p-3 rounded-lg focus:outline-[#c6444c]"
+                value={horaInicio}
+                onChange={(e) => setHoraInicio(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-500">Fim</label>
+              <input 
+                type="time" 
+                className="w-full border p-3 rounded-lg focus:outline-[#c6444c]"
+                value={horaFim}
+                onChange={(e) => setHoraFim(e.target.value)}
+              />
+            </div>
+            <button 
+              onClick={handleGerarEmMassa}
+              disabled={loading}
+              className="bg-gray-800 text-white p-3 rounded-lg font-bold hover:bg-black transition-all h-[50px]"
+            >
+              {loading ? 'Gerando...' : 'Criar Todos'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Isso vai criar horários de 1h em 1h automaticamente entre o início e o fim.
+          </p>
+        </div>
+      )}
+
+      {/* LISTAGEM DOS HORÁRIOS */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {horarios.length === 0 && (
+          <div className="col-span-full text-center py-10 text-gray-400">
+            Nenhum horário aberto. Use o gerador acima! ☝️
+          </div>
+        )}
+
         {horarios.map((item) => {
           const reservado = item.status === 'reservado'
-          
           return (
             <div key={item.id} className={`relative p-5 rounded-2xl border transition-all hover:shadow-md ${
               reservado ? 'bg-white border-[#c6444c] border-l-8' : 'bg-white border-gray-200 border-l-8 border-l-green-400'
             }`}>
-              
               <div className="flex justify-between items-start mb-3">
                 <span className="text-2xl font-bold text-gray-700 block">
                   {formatar(item.data_hora).split(',')[1]} 
@@ -112,7 +181,6 @@ export default function Manager({ session }) {
                   <p className="text-xs text-green-600 font-bold uppercase">Disponível</p>
                 </div>
               )}
-
             </div>
           )
         })}
